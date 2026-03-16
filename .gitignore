@@ -1,0 +1,104 @@
+# ==============================================================================
+# TrimBG - Strict .gitignore Configuration
+# ==============================================================================
+# Expertly crafted for React + Tailwind + AI/ML (WASM/ONNX) Projects.
+# Guarantees a lightweight, secure, and production-ready repository.
+
+# ------------------------------------------------------------------------------
+# 1. CRITICAL: AI & Machine Learning Models (Large Files)
+# ------------------------------------------------------------------------------
+# These files must be fetched from a CDN or external storage at runtime.
+# Do NOT upload to GitHub as they often exceed 50MB and bloat the repo.
+*.onnx
+*.wasm
+public/models/
+public/weights/
+src/assets/models/
+backend/models/
+
+# ------------------------------------------------------------------------------
+# 2. Dependencies & Runtime
+# ------------------------------------------------------------------------------
+node_modules/
+.pnp
+.pnp.js
+jspm_packages/
+
+# ------------------------------------------------------------------------------
+# 3. Environment & Secrets (Security Critical)
+# ------------------------------------------------------------------------------
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.pem
+*.key
+auth.json
+
+# ------------------------------------------------------------------------------
+# 4. Build Artifacts & Production
+# ------------------------------------------------------------------------------
+dist/
+build/
+out/
+.next/
+.serverless/
+bin/
+obj/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# ------------------------------------------------------------------------------
+# 5. Testing & Coverage
+# ------------------------------------------------------------------------------
+coverage/
+.nyc_output/
+junit.xml
+test-results/
+
+# ------------------------------------------------------------------------------
+# 6. Logs & Debugging
+# ------------------------------------------------------------------------------
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.eslintcache
+.stylelintcache
+
+# ------------------------------------------------------------------------------
+# 7. IDE & Editor Specific Files
+# ------------------------------------------------------------------------------
+# VS Code
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/launch.json
+
+# IntelliJ / WebStorm
+.idea/
+*.iws
+*.iml
+*.ipr
+
+# Other Editors
+*.sw?
+*.bak
+*~
+.DS_Store
+Thumbs.db
+
+# ------------------------------------------------------------------------------
+# 8. Miscellaneous
+# ------------------------------------------------------------------------------
+.cache/
+.parcel-cache/
+.turbo/
+.vercel/
+.netlify/

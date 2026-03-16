@@ -1,0 +1,66 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 30 20% 98%; /* Very light cream/white */
+    --foreground: 20 10% 20%; /* Dark charcoal/brown for text */
+
+    --card: 0 0% 100%;
+    --card-foreground: 20 10% 20%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 20 10% 20%;
+
+    --primary: 25 30% 85%; /* Light peachy/tan background for buttons */
+    --primary-foreground: 20 10% 20%;
+
+    --secondary: 30 15% 95%;
+    --secondary-foreground: 20 10% 20%;
+
+    --muted: 30 10% 90%;
+    --muted-foreground: 20 10% 45%;
+
+    --accent: 25 40% 90%;
+    --accent-foreground: 20 10% 20%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 30 10% 90%;
+    --input: 30 10% 92%;
+    --ring: 25 30% 80%;
+
+    --radius: 1rem;
+
+    /* Matching the reference image aesthetic */
+    --gradient-hero: linear-gradient(180deg, hsl(30, 20%, 98%), hsl(30, 20%, 95%));
+    --shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.03);
+    --shadow-hover: 0 15px 40px rgba(0, 0, 0, 0.05);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', sans-serif;
+  }
+}
+
+@layer components {
+  .minimal-card {
+    @apply bg-white border border-border/50 shadow-soft rounded-3xl overflow-hidden transition-all duration-300;
+  }
+  
+  .peachy-button {
+    @apply inline-flex items-center justify-center gap-3 bg-[#2D2D2D] text-[#FAF9F6] hover:bg-[#1A1A1A] transition-all duration-300 rounded-full px-8 py-3 font-bold shadow-md hover:shadow-xl cursor-pointer hover:-translate-y-0.5 active:scale-95;
+  }
+
+  .section-container {
+    @apply max-w-7xl mx-auto px-6 py-20;
+  }
+}
