@@ -32,9 +32,19 @@ class MattingDataset(Dataset):
         image_path, mask_path = self.pairs[index]
         image = Image.open(image_path).convert("RGB").resize((self.size, self.size), Image.Resampling.BILINEAR)
         mask = Image.open(mask_path).convert("L").resize((self.size, self.size), Image.Resampling.BILINEAR)
-        if self.augment and random.random() < 0.5:
-            image = image.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
-            mask = mask.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+        if self.augment:
+            if random.random() < 0.5:
+                image = image.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+                mask = mask.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+            if random.random() < 0.35:
+                # Mild photometric changes preserve the alpha target while varying capture conditions.
+                from PIL import ImageEnhance
+                image = ImageEnhance.Brightness(image).enhance(random.uniform(0.82, 1.18))
+                image = ImageEnhance.Contrast(image).enhance(random.uniform(0.85, 1.15))
+            if random.random() < 0.20:
+                # Randomly soften the RGB input only; the target matte remains unchanged.
+                from PIL import ImageFilter
+                image = image.filter(ImageFilter.GaussianBlur(radius=random.uniform(0.2, 0.7)))
         x = torch.from_numpy(np.asarray(image, dtype=np.float32).copy()).permute(2, 0, 1) / 255.0
         y = torch.from_numpy(np.asarray(mask, dtype=np.float32).copy())[None] / 255.0
         return x, y
@@ -103,7 +113,9 @@ def pairs_from(root: Path) -> list[tuple[Path, Path]]:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data", type=Path, default=Path("training_data"))
+    parser.add_argument("--data", type=Path, default=Path("training_data"), help="legacy single-folder dataset")
+    parser.add_argument("--train-data", type=Path, default=None, help="dataset root containing images/ and masks/ for training")
+    parser.add_argument("--val-data", type=Path, default=None, help="dataset root containing images/ and masks/ for validation")
     parser.add_argument("--out", type=Path, default=Path("models/tiny-matting"))
     parser.add_argument("--epochs", type=int, default=8)
     parser.add_argument("--size", type=int, default=128)
@@ -115,12 +127,18 @@ def main():
     torch.manual_seed(args.seed)
     torch.set_num_threads(2)
 
-    pairs = pairs_from(args.data)
-    if len(pairs) < 10:
-        raise SystemExit("Need at least 10 image/mask pairs")
-    random.shuffle(pairs)
-    val_count = max(1, int(len(pairs) * 0.2))
-    val_pairs, train_pairs = pairs[:val_count], pairs[val_count:]
+    train_root = args.train_data or args.data
+    val_root = args.val_data
+    train_pairs = pairs_from(train_root)
+    val_pairs = pairs_from(val_root) if val_root else []
+    if len(train_pairs) < 10:
+        raise SystemExit("Need at least 10 image/mask pairs for training")
+    if not val_pairs:
+        random.shuffle(train_pairs)
+        val_count = max(1, int(len(train_pairs) * 0.2))
+        val_pairs, train_pairs = train_pairs[:val_count], train_pairs[val_count:]
+    if not val_pairs:
+        raise SystemExit("Need at least 1 image/mask pair for validation")
     train_loader = DataLoader(MattingDataset(train_pairs, args.size, augment=True), batch_size=args.batch_size, shuffle=True, num_workers=0)
     val_loader = DataLoader(MattingDataset(val_pairs, args.size), batch_size=args.batch_size, shuffle=False, num_workers=0)
 
@@ -129,6 +147,9 @@ def main():
     optimizer = torch.optim.AdamW(model.parameters(), lr=2e-3, weight_decay=1e-4)
     bce = nn.BCELoss()
     history = []
+    best_val_loss = float("inf")
+    best_epoch = 0
+    best_state = None
     start = time.perf_counter()
 
     for epoch in range(args.epochs):
@@ -152,16 +173,22 @@ def main():
                 mae += torch.abs(pred - y).mean().item() * x.size(0)
         metrics = {"epoch": epoch + 1, "train_loss": train_loss / len(train_pairs), "val_loss": val_loss / len(val_pairs), "val_mae": mae / len(val_pairs)}
         history.append(metrics)
+        if metrics["val_loss"] < best_val_loss:
+            best_val_loss = metrics["val_loss"]
+            best_epoch = epoch + 1
+            best_state = {key: value.detach().cpu().clone() for key, value in model.state_dict().items()}
         print(json.dumps(metrics))
 
     args.out.mkdir(parents=True, exist_ok=True)
     weights_path = args.out / "tiny_matting.pt"
-    onnx_path = args.out / "tiny_matting_128.onnx"
+    onnx_path = args.out / f"tiny_matting_{args.size}.onnx"
+    if best_state is not None:
+        model.load_state_dict(best_state)
     torch.save(model.state_dict(), weights_path)
     model.eval()
     dummy = torch.zeros(1, 3, args.size, args.size)
     torch.onnx.export(model, dummy, onnx_path, input_names=["image"], output_names=["alpha"], opset_version=17, dynamo=False)
-    summary = {"pairs": len(pairs), "train_pairs": len(train_pairs), "val_pairs": len(val_pairs), "size": args.size, "epochs": args.epochs, "seconds": round(time.perf_counter() - start, 2), "parameters": sum(p.numel() for p in model.parameters()), "history": history}
+    summary = {"pairs": len(train_pairs) + len(val_pairs), "train_pairs": len(train_pairs), "val_pairs": len(val_pairs), "size": args.size, "epochs": args.epochs, "best_epoch": best_epoch, "best_val_loss": best_val_loss, "seconds": round(time.perf_counter() - start, 2), "parameters": sum(p.numel() for p in model.parameters()), "history": history}
     (args.out / "training_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print(json.dumps({"weights": str(weights_path), "onnx": str(onnx_path), "summary": str(args.out / 'training_summary.json'), "seconds": summary["seconds"], "parameters": summary["parameters"]}))
 

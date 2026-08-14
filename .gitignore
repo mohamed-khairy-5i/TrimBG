@@ -11,6 +11,8 @@
 # Do NOT upload to GitHub as they often exceed 50MB and bloat the repo.
 *.onnx
 *.wasm
+# The local ONNX browser benchmark needs this runtime binary at build time.
+!src/assets/onnxruntime/ort-wasm-simd-threaded.wasm
 public/models/
 public/weights/
 src/assets/models/
@@ -105,6 +107,9 @@ Thumbs.db
 
 # Local training data and experiment outputs
 training_data/
+training_data_*/
+external_data/
+experiments/
 models/
 
 # Python cache

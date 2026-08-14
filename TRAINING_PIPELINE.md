@@ -8,9 +8,9 @@
 
 ```bash
 python3 scripts/inspect_assets.py
-python3 scripts/generate_matting_data.py --count 256 --width 256 --height 256
-python3 scripts/train_tiny_matting.py --data training_data --out models/tiny-matting-v2 --epochs 12 --size 128 --batch-size 8
-python3 scripts/evaluate_tiny_matting.py --model models/tiny-matting-v2/tiny_matting_128.onnx --images public --out models/tiny-matting-v2/eval --size 128
+python3 scripts/generate_matting_data.py --count 6000 --val-count 600 --output training_data_large
+python3 scripts/train_tiny_matting.py --train-data training_data_large/train --val-data training_data_large/val --out models/tiny-matting-large --epochs 12 --size 128 --batch-size 16
+python3 scripts/evaluate_tiny_matting.py --model models/tiny-matting-large/tiny_matting_128.onnx --images public --out models/tiny-matting-large/eval --size 128
 ```
 
 يمكن فحص مواصفات أي نموذج ONNX بالأمر التالي:
@@ -30,7 +30,7 @@ python3 scripts/evaluate_u2netp.py --model models/u2netp/u2netp.onnx --images pu
 
 ## نتيجة التجربة الحالية
 
-تم توليد **256 زوجًا** من الصور والأقنعة باستخدام **7 صور foreground شفافة** و**6 صور خلفيات**. استغرق تدريب النموذج الصغير 84 ثانية على CPU، وأصبح حجم ملف ONNX حوالي **0.94 ميجابايت**. بلغ زمن الاستدلال المحلي للنموذج عند دقة 128×128 حوالي **0.006 ثانية** للصورة، لكن اختباره على صور حقيقية خارج نطاق بيانات التدريب أظهر تعميمًا ضعيفًا؛ لذلك لم يتم استبدال نموذج الموقع به.
+تم تجهيز مسار لتوليد **6000 عينة تدريب و600 عينة تحقق** باستخدام **7 صور foreground شفافة** و**6 صور خلفيات**، مع تنويعات في الحجم والدوران والقص والإضاءة والضبابية والخلفيات التركيبية. استغرق تدريب النموذج الصغير 84 ثانية على CPU، وأصبح حجم ملف ONNX حوالي **0.94 ميجابايت**. بلغ زمن الاستدلال المحلي للنموذج عند دقة 128×128 حوالي **0.006 ثانية** للصورة، لكن اختباره على صور حقيقية خارج نطاق بيانات التدريب أظهر تعميمًا ضعيفًا؛ لذلك لم يتم استبدال نموذج الموقع به.
 
 تم أيضًا اختبار U2NetP الرسمي. حجمه حوالي **4.4 ميجابايت**، وزمن الاستدلال المحلي في بيئة الاختبار حوالي **0.17 ثانية** عند 320×320. جودته تحتاج اختبارًا أوسع قبل دمجه في المتصفح، كما أن تشغيله في المتصفح يحتاج مسار ONNX مخصصًا بدل واجهة `@imgly/background-removal` الحالية.
 
