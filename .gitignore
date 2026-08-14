@@ -102,3 +102,7 @@ Thumbs.db
 .turbo/
 .vercel/
 .netlify/
+
+# Local training data and experiment outputs
+training_data/
+models/
