@@ -24,10 +24,15 @@ const createConfig = (onProgress?: ProgressCallback): RemovalConfig => {
   const useGpu = supportsWebGPU();
 
   return {
-    // The quantized model is considerably lighter on CPU-only devices. On
-    // WebGPU, fp16 keeps better edge quality while using the faster provider.
+    // WebGPU devices run the fp16 model on the GPU, which is roughly 20x
+    // faster than the CPU path in IMG.LY's benchmarks. CPU-only devices use
+    // the quantized model, which downloads and processes faster at the cost
+    // of slightly reduced edge quality on difficult content.
     model: useGpu ? 'isnet_fp16' : 'isnet_quint8',
     device: useGpu ? 'gpu' : 'cpu',
+    // Built-in rescaling shrinks large photos before inference, keeping the
+    // mask prediction fast while the final cutout is restored to full size.
+    rescale: true,
     proxyToWorker: true,
     debug: false,
     output: {
