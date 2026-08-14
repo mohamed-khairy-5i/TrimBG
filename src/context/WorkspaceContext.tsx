@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { useToast } from "@/hooks/use-toast";
-import { removeBackground, loadImage, ProgressCallback } from '@/lib/backgroundRemover';
+import { removeBackground, preloadBackgroundRemoval, ProgressCallback } from '@/lib/backgroundRemover';
 
 interface WorkspaceContextType {
   originalImage: string | null;
@@ -24,6 +24,13 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [isLoadingModel, setIsLoadingModel] = useState(false);
   const [progress, setProgress] = useState(0);
 
+  // Begin model initialization after an image is selected, so the Remove
+  // button does not carry the full download cost in its critical path.
+  useEffect(() => {
+    if (!originalImage) return;
+    void preloadBackgroundRemoval();
+  }, [originalImage]);
+
   const processImage = useCallback(async () => {
     if (!originalImage) return;
 
@@ -34,14 +41,12 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     try {
       const response = await fetch(originalImage);
       const blob = await response.blob();
-      const imageElement = await loadImage(blob);
-
       const onProgress: ProgressCallback = (p) => {
         setIsLoadingModel(false);
         setProgress(Math.round(p * 100));
       };
 
-      const processedBlob = await removeBackground(imageElement, onProgress);
+      const processedBlob = await removeBackground(blob, onProgress);
       const processedUrl = URL.createObjectURL(processedBlob);
 
       setProgress(100);

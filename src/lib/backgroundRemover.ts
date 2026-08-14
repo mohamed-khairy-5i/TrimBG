@@ -1,64 +1,117 @@
 export type ProgressCallback = (progress: number) => void;
 
-/**
- * دالة إزالة الخلفية باستخدام محرك IMG.LY المتقدم (المستوى العالمي)
- */
-export const removeBackground = async (imageElement: HTMLImageElement, onProgress?: ProgressCallback): Promise<Blob> => {
-  try {
-    console.log('Initiating IMG.LY SOTA Background Removal...');
+type ImglyModule = typeof import('@imgly/background-removal');
+type RemovalConfig = Parameters<ImglyModule['removeBackground']>[1];
 
-    // تحميل المكتبة 
-    const imgly = await import('@imgly/background-removal');
+let imglyModulePromise: Promise<ImglyModule> | null = null;
+let preloadPromise: Promise<void> | null = null;
 
-    // استخراج الدالة الصحيحة (تدعم التصدير الافتراضي أو المسمى)
-    const removeFn = imgly.removeBackground || (imgly as any).default;
-
-    if (typeof removeFn !== 'function') {
-      console.error('Available exports in @imgly/background-removal:', Object.keys(imgly));
-      throw new Error('Background removal function not found in the library exports.');
-    }
-
-    // تجهيز بيانات الصورة كـ URL لتسهيل المعالجة
-    const canvas = document.createElement('canvas');
-    canvas.width = imageElement.naturalWidth;
-    canvas.height = imageElement.naturalHeight;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('Failed to create canvas context');
-    ctx.drawImage(imageElement, 0, 0);
-    const imageData = canvas.toDataURL('image/png');
-
-    const config: any = {
-      progress: (key: string, current: number, total: number) => {
-        console.log(`Phase: ${key}, Progress: ${current}/${total}`);
-        if (onProgress) {
-          onProgress(current / total);
-        }
-      },
-      output: {
-        format: 'image/png',
-        quality: 1.0
-      }
-    };
-
-    // تنفيذ المعالجة الحقيقية
-    const resultBlob = await removeFn(imageData, config);
-    console.log('Background removed successfully by IMG.LY');
-    return resultBlob;
-  } catch (error) {
-    console.error('Error during background removal:', error);
-    throw error;
+const loadImgly = (): Promise<ImglyModule> => {
+  // Keep one shared import promise so concurrent uploads do not initialize the
+  // ONNX runtime more than once.
+  if (!imglyModulePromise) {
+    imglyModulePromise = import('@imgly/background-removal');
   }
+
+  return imglyModulePromise;
+};
+
+const supportsWebGPU = (): boolean => {
+  return typeof navigator !== 'undefined' && 'gpu' in navigator;
+};
+
+const createConfig = (onProgress?: ProgressCallback): RemovalConfig => {
+  const useGpu = supportsWebGPU();
+
+  return {
+    // The quantized model is considerably lighter on CPU-only devices. On
+    // WebGPU, fp16 keeps better edge quality while using the faster provider.
+    model: useGpu ? 'isnet_fp16' : 'isnet_quint8',
+    device: useGpu ? 'gpu' : 'cpu',
+    proxyToWorker: true,
+    debug: false,
+    output: {
+      format: 'image/png',
+      quality: 0.92,
+    },
+    progress: (_key: string, current: number, total: number) => {
+      if (onProgress && total > 0) {
+        onProgress(Math.max(0, Math.min(1, current / total)));
+      }
+    },
+  } as RemovalConfig;
 };
 
 /**
- * دالة مساعدة لتحميل الصور
+ * Preloads the runtime and model once. Calling this when the workspace opens
+ * moves the model download out of the user's click-to-result critical path.
  */
+export const preloadBackgroundRemoval = (onProgress?: ProgressCallback): Promise<void> => {
+  if (!preloadPromise) {
+    preloadPromise = loadImgly()
+      .then(({ preload }) => preload(createConfig(onProgress)))
+      .catch((error) => {
+        // Allow a later user action to retry if a transient preload failed.
+        preloadPromise = null;
+        throw error;
+      });
+  }
+
+  return preloadPromise;
+};
+
+/**
+ * Removes the background without converting the image to a base64 data URL.
+ * Passing the original Blob avoids an extra full-size canvas copy and reduces
+ * memory pressure for large phone photos.
+ */
+export const removeBackground = async (
+  image: Blob | HTMLImageElement,
+  onProgress?: ProgressCallback,
+): Promise<Blob> => {
+  // If the workspace started preloading, wait for the same shared promise
+  // instead of initializing a second ONNX session on button click.
+  if (preloadPromise) {
+    try {
+      await preloadPromise;
+    } catch {
+      // The removal call below can retry after a transient preload failure.
+    }
+  }
+
+  const imgly = await loadImgly();
+  const removeFn = imgly.removeBackground || (imgly as unknown as { default: ImglyModule['removeBackground'] }).default;
+
+  if (typeof removeFn !== 'function') {
+    throw new Error('Background removal function not found in the library exports.');
+  }
+
+  let source: Blob | HTMLImageElement = image;
+
+  // Keep backwards compatibility for the existing component while avoiding
+  // canvas.toDataURL() whenever the caller already has the original Blob.
+  if (image instanceof HTMLImageElement) {
+    const response = await fetch(image.currentSrc || image.src);
+    source = await response.blob();
+  }
+
+  return removeFn(source, createConfig(onProgress));
+};
+
+/** Loads an image element for legacy UI paths that need intrinsic dimensions. */
 export const loadImage = (file: Blob): Promise<HTMLImageElement> => {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error('Failed to load image element'));
     const url = URL.createObjectURL(file);
+
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(img);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Failed to load image element'));
+    };
     img.src = url;
   });
 };
