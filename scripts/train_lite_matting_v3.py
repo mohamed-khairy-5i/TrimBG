@@ -176,7 +176,13 @@ def gradient_map(x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     return gx, gy
 
 
-def boundary_aware_loss(pred: torch.Tensor, target: torch.Tensor) -> tuple[torch.Tensor, dict[str, float]]:
+def boundary_aware_loss(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    bce_weight: float = 0.35,
+    grad_weight: float = 0.65,
+    dice_weight: float = 0.25,
+) -> tuple[torch.Tensor, dict[str, float]]:
     eps = 1e-6
     weights = boundary_weight(target)
     abs_loss = (weights * torch.abs(pred - target)).mean()
@@ -188,11 +194,18 @@ def boundary_aware_loss(pred: torch.Tensor, target: torch.Tensor) -> tuple[torch
     grad_loss = torch.abs(px - tx).mean() + torch.abs(py - ty).mean()
     intersection = (pred * target).sum(dim=(1, 2, 3))
     dice = 1.0 - ((2.0 * intersection + 1.0) / (pred.sum(dim=(1, 2, 3)) + target.sum(dim=(1, 2, 3)) + 1.0)).mean()
-    total = 1.0 * abs_loss + 0.35 * bce_loss + 0.65 * grad_loss + 0.25 * dice
+    total = 1.0 * abs_loss + bce_weight * bce_loss + grad_weight * grad_loss + dice_weight * dice
     return total, {"l1": float(abs_loss.detach()), "bce": float(bce_loss.detach()), "grad": float(grad_loss.detach()), "dice": float(dice.detach())}
 
 
-def evaluate(model: nn.Module, loader: DataLoader, device: torch.device) -> dict[str, float]:
+def evaluate(
+    model: nn.Module,
+    loader: DataLoader,
+    device: torch.device,
+    bce_weight: float = 0.35,
+    grad_weight: float = 0.65,
+    dice_weight: float = 0.25,
+) -> dict[str, float]:
     model.eval()
     total_loss = 0.0
     total_mae = 0.0
@@ -202,7 +215,7 @@ def evaluate(model: nn.Module, loader: DataLoader, device: torch.device) -> dict
         for x, y in loader:
             x, y = x.to(device), y.to(device)
             pred = model(x)
-            loss, _ = boundary_aware_loss(pred, y)
+            loss, _ = boundary_aware_loss(pred, y, bce_weight, grad_weight, dice_weight)
             gx_p, gy_p = gradient_map(pred)
             gx_y, gy_y = gradient_map(y)
             total_loss += float(loss) * x.size(0)
@@ -236,6 +249,9 @@ def main() -> None:
     parser.add_argument("--width-multiplier", type=float, default=1.0, help="channel-width scale; 1.0 preserves the original V3")
     parser.add_argument("--resume", type=Path, default=None, help="resume from a last_checkpoint.pt created by this script")
     parser.add_argument("--threads", type=int, default=2, help="CPU torch threads")
+    parser.add_argument("--bce-weight", type=float, default=0.35, help="BCE term weight")
+    parser.add_argument("--grad-weight", type=float, default=0.65, help="gradient term weight")
+    parser.add_argument("--dice-weight", type=float, default=0.25, help="Dice term weight")
     args = parser.parse_args()
 
     random.seed(args.seed)
@@ -299,13 +315,13 @@ def main() -> None:
             x, y = x.to(device), y.to(device)
             optimizer.zero_grad(set_to_none=True)
             pred = model(x)
-            loss, _ = boundary_aware_loss(pred, y)
+            loss, _ = boundary_aware_loss(pred, y, args.bce_weight, args.grad_weight, args.dice_weight)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 3.0)
             optimizer.step()
             train_loss += float(loss.detach()) * x.size(0)
             train_count += x.size(0)
-        val = evaluate(model, val_loader, device)
+        val = evaluate(model, val_loader, device, args.bce_weight, args.grad_weight, args.dice_weight)
         scheduler.step(val["loss"])
         metrics = {
             "epoch": epoch,
@@ -359,6 +375,7 @@ def main() -> None:
         "val_pairs": len(val_pairs),
         "size": args.size,
         "width_multiplier": args.width_multiplier,
+        "loss_weights": {"bce": args.bce_weight, "grad": args.grad_weight, "dice": args.dice_weight},
         "epochs_requested": args.epochs,
         "best_epoch": best_epoch,
         "best_val_loss": best_loss,

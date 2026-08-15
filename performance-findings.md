@@ -250,3 +250,10 @@ A state-safety issue found during the release check was fixed: returning to the 
 
 
 A post-build browser smoke test also passed for the fast mode on the same AIM-500 rabbit image. After returning to the home page, selecting `معالجة سريعة`, and uploading the image, `/workspace` rendered the transparent output, showed the download button, and displayed `المعالجة السريعة — U2NetP FP16` in the sidebar. This confirms that the mode selection survives navigation and routes to the intended engine.
+
+
+## دورة LiteMatting النهائية — قرار 2026-08-15
+
+جرى اختبار توليد بيانات V4 بأحجام عناصر أكبر، تدريب V4-128 وV4-160، تقطير U2NetP، تدريب هجين يجمع ground truth مع أقنعة المعلم، خسارة hard-edge، ورفع عرض الشبكة إلى 3.0. أفضل نتيجة مستقلة داخل عائلة LiteMatting كانت تقريباً MAE=0.12426 للهجين، مع بقاء هالات وتسرب واضحين بصرياً في الشعر والفرو والخلفيات المعقدة. V4-160 وV5-192-lite لم يقدما تحسناً، وتجربة width3-128 احتاجت 641.7 ثانية لأول epoch وحققت MAE=0.25754، لذلك أُوقفت.
+
+أُغلقت دورة LiteMatting الحالية دون دمج نموذج مخصص في الموقع. هذا قرار مبني على القياس: U2NetP FP16 وصل إلى MAE=0.050497 مع نحو 0.6–0.8 ثانية في مسار المتصفح، بينما أفضل LiteMatting ظل أضعف بوضوح بصرياً. أي جولة لاحقة يجب أن تستخدم معماريّة pretrained أقوى أو بيانات alpha حقيقية موجهة للحالات الصعبة، لا المزيد من تغيير الدقة أو عرض الشبكة الحالي.

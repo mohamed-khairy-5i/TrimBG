@@ -70,10 +70,10 @@ def prepare_background(path: Path | None, size: tuple[int, int], rng: random.Ran
     return ImageEnhance.Brightness(background).enhance(rng.uniform(0.75, 1.25))
 
 
-def transform_foreground(path: Path, size: tuple[int, int], rng: random.Random) -> tuple[Image.Image, Image.Image]:
+def transform_foreground(path: Path, size: tuple[int, int], rng: random.Random, scale_min: float = 0.25, scale_max: float = 1.15) -> tuple[Image.Image, Image.Image]:
     with Image.open(path) as source:
         foreground = source.convert("RGBA")
-    scale = rng.uniform(0.25, 1.15) * min(size) / max(foreground.size)
+    scale = rng.uniform(scale_min, scale_max) * min(size) / max(foreground.size)
     new_size = (max(12, int(foreground.width * scale)), max(12, int(foreground.height * scale)))
     foreground = foreground.resize(new_size, Image.Resampling.LANCZOS)
     if rng.random() < 0.5:
@@ -94,16 +94,16 @@ def transform_foreground(path: Path, size: tuple[int, int], rng: random.Random) 
     return canvas, canvas.getchannel("A")
 
 
-def generate_split(root: Path, foregrounds: list[Path], backgrounds: list[Path], split: str, count: int, size: tuple[int, int], rng: random.Random) -> None:
+def generate_split(root: Path, foregrounds: list[Path], backgrounds: list[Path], split: str, count: int, size: tuple[int, int], rng: random.Random, scale_min: float, scale_max: float, background_probability: float) -> None:
     image_dir = root / split / "images"
     mask_dir = root / split / "masks"
     image_dir.mkdir(parents=True, exist_ok=True)
     mask_dir.mkdir(parents=True, exist_ok=True)
     for index in range(count):
         fg_path = rng.choice(foregrounds)
-        bg_path = rng.choice(backgrounds) if backgrounds and rng.random() < 0.72 else None
+        bg_path = rng.choice(backgrounds) if backgrounds and rng.random() < background_probability else None
         background = prepare_background(bg_path, size, rng)
-        foreground, mask = transform_foreground(fg_path, size, rng)
+        foreground, mask = transform_foreground(fg_path, size, rng, scale_min=scale_min, scale_max=scale_max)
         composed = Image.alpha_composite(background.convert("RGBA"), foreground).convert("RGB")
         stem = f"sample_{index:06d}"
         composed.save(image_dir / f"{stem}.jpg", quality=rng.randint(84, 94), optimize=True)
@@ -118,6 +118,9 @@ def main() -> None:
     parser.add_argument("--width", type=int, default=256)
     parser.add_argument("--height", type=int, default=256)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--scale-min", type=float, default=0.25, help="minimum foreground scale relative to canvas")
+    parser.add_argument("--scale-max", type=float, default=1.15, help="maximum foreground scale relative to canvas")
+    parser.add_argument("--background-probability", type=float, default=0.72, help="probability of using a real background asset")
     parser.add_argument("--output", type=Path, default=None)
     args = parser.parse_args()
 
@@ -137,8 +140,12 @@ def main() -> None:
 
     output = args.output or (root / "training_data_large")
     size = (args.width, args.height)
-    generate_split(output, foregrounds, backgrounds, "train", args.count, size, rng)
-    generate_split(output, foregrounds, backgrounds, "val", args.val_count, size, rng)
+    if not 0 < args.scale_min <= args.scale_max:
+        raise SystemExit("scale bounds must satisfy 0 < scale-min <= scale-max")
+    if not 0 <= args.background_probability <= 1:
+        raise SystemExit("background-probability must be between 0 and 1")
+    generate_split(output, foregrounds, backgrounds, "train", args.count, size, rng, args.scale_min, args.scale_max, args.background_probability)
+    generate_split(output, foregrounds, backgrounds, "val", args.val_count, size, rng, args.scale_min, args.scale_max, args.background_probability)
     print(f"train={args.count}")
     print(f"val={args.val_count}")
     print(f"foreground_sources={len(foregrounds)}")
