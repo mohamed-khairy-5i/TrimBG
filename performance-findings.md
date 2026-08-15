@@ -221,3 +221,14 @@ The balanced tiny browser benchmark page loaded successfully with cross-origin i
 The balanced tiny student browser benchmark completed on the same test JPG with crossOriginIsolated=true and six hardware threads: model setup 202 ms, inference 10 ms, total 275 ms, output PNG 893,707 bytes. The result visually retained the person but showed noticeable low-resolution/blocky transparency around the head, face and jacket compared with RMBG; this confirms the speed advantage but also the quality limitation at 96x96.
 
 A console check after the balanced browser run produced no JavaScript errors or runtime warnings in the benchmark page.
+
+
+## Progressive V3 scaled 2x results
+
+A progressively trained V3 model with `width_multiplier=2.0` was expanded to 272,577 parameters, compared with 72,417 in the original V3. The ONNX artifact is 1,098,227 bytes (about 1.05 MiB).
+
+The best 128x128 progressive checkpoint was trained from 3,100 train pairs, with 100 held-out AIM-500 validation pairs. Its full validation result was `mean_mae=0.13559` and `mean_seconds=0.00722` on the local CPU. In Chromium with `crossOriginIsolated=true` and six threads, it measured `modelReadyMs=203`, `inferenceMs=45`, and `totalMs=324` on the reference image.
+
+The progressive 256x256 fine-tuning did not improve over the previous V3 256 checkpoint. The best complete evaluation currently available for progressive 256-v2 is `mean_mae=0.24015` and `mean_seconds=0.03455` on the same AIM-500 validation split. Chromium measured `modelReadyMs=204`, `inferenceMs=144`, and `totalMs=436` on the reference image. The previous V3 256 result remains better at MAE 0.1734, so the 256 progressive branch is not selected.
+
+The visual Chromium checks show that 128 progressive is fast but loses parts of the subject and thin boundaries, while 256 progressive preserves more of the subject but leaves background leakage around the shoulders and upper edges. These results do not meet the production acceptance rule; ISNet remains the production model. The progressive files and benchmarks remain local experiment artifacts until GitHub authentication is restored.
