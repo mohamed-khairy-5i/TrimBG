@@ -19,18 +19,18 @@ from PIL import Image
 def preprocess(image: Image.Image, size: int) -> np.ndarray:
     resized = image.resize((size, size), Image.Resampling.BILINEAR)
     array = np.asarray(resized, dtype=np.float32) / 255.0
-    mean = np.asarray([0.485, 0.456, 0.406], dtype=np.float32)
-    std = np.asarray([0.229, 0.224, 0.225], dtype=np.float32)
+    mean = np.asarray([0.5, 0.5, 0.5], dtype=np.float32)
+    std = np.asarray([0.5, 0.5, 0.5], dtype=np.float32)
     return ((array - mean) / std).transpose(2, 0, 1)[None].astype(np.float32)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", type=Path, default=Path("external_data/modnet/model_quantized.onnx"))
+    parser.add_argument("--model", type=Path, default=Path("public/models/modnet/model_quantized.onnx"))
     parser.add_argument("--images", type=Path, default=Path("external_data/aim500/val/images"))
     parser.add_argument("--masks", type=Path, default=Path("external_data/aim500/val/masks"))
-    parser.add_argument("--out", type=Path, default=Path("models/modnet/eval-aim"))
-    parser.add_argument("--size", type=int, default=512)
+    parser.add_argument("--out", type=Path, default=Path("experiments/modnet/eval-aim"))
+    parser.add_argument("--size", type=int, default=256)
     parser.add_argument("--limit", type=int, default=100)
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)

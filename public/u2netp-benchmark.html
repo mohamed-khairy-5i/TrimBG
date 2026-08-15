@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TrimBG U2NetP Benchmark</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+    body { margin: 0; padding: 24px; background: #111827; color: #f9fafb; }
+    main { max-width: 1000px; margin: 0 auto; }
+    .panel { padding: 18px; background: #1f2937; border: 1px solid #374151; border-radius: 14px; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+    button, input { font: inherit; }
+    button { cursor: pointer; border: 0; border-radius: 10px; padding: 10px 14px; background: #22c55e; color: #052e16; font-weight: 700; }
+    button.secondary { background: #93c5fd; color: #172554; }
+    pre { white-space: pre-wrap; line-height: 1.6; color: #d1fae5; }
+    .images { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 16px; }
+    figure { margin: 0; padding: 10px; background: #111827; border-radius: 12px; }
+    img { width: 100%; max-height: 520px; object-fit: contain; background: repeating-conic-gradient(#374151 0% 25%, #1f2937 0% 50%) 50% / 20px 20px; }
+    figcaption { margin-top: 8px; color: #cbd5e1; }
+    @media (max-width: 700px) { .images { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>اختبار U2NetP داخل المتصفح</h1>
+    <div class="panel">
+      <p>اختبار مستقل لنموذج U2NetP العام بحجم 4.57 MB. المعالجة محلية عبر ONNX Runtime Web وWASM، مع إدخال 320×320 وتطبيع RGB إلى [0, 1].</p>
+      <div class="row">
+        <input id="file" type="file" accept="image/*" />
+        <button id="sample" class="secondary">تحميل صورة الاختبار</button>
+        <button id="run">تشغيل U2NetP</button>
+      </div>
+      <pre id="status">جاهز. crossOriginIsolated = …</pre>
+    </div>
+    <div class="images">
+      <figure><img id="before" alt="الصورة الأصلية" /><figcaption>الأصل</figcaption></figure>
+      <figure><img id="after" alt="نتيجة U2NetP" /><figcaption>نتيجة U2NetP</figcaption></figure>
+    </div>
+  </main>
+  <script type="module">
+    import { preloadU2Netp, removeBackgroundWithU2Netp } from '/src/lib/u2netpBrowser.ts';
+    const fileInput = document.querySelector('#file');
+    const before = document.querySelector('#before');
+    const after = document.querySelector('#after');
+    const status = document.querySelector('#status');
+    let selectedBlob = null;
+    let selectedUrl = null;
+    let resultUrl = null;
+    function setStatus(text) { status.textContent = text; }
+    function setBlob(blob) {
+      selectedBlob = blob;
+      if (selectedUrl) URL.revokeObjectURL(selectedUrl);
+      selectedUrl = URL.createObjectURL(blob);
+      before.src = selectedUrl;
+      if (resultUrl) URL.revokeObjectURL(resultUrl);
+      resultUrl = null;
+      after.removeAttribute('src');
+    }
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files?.[0];
+      if (file) setBlob(file);
+    });
+    document.querySelector('#sample').addEventListener('click', async () => {
+      setStatus('تحميل صورة الاختبار…');
+      const response = await fetch('/photo-1517841905240-472988babdf9.jpg');
+      setBlob(await response.blob());
+      setStatus('تم تحميل الصورة. اضغط تشغيل U2NetP.');
+    });
+    document.querySelector('#run').addEventListener('click', async () => {
+      if (!selectedBlob) { setStatus('اختر صورة أولاً.'); return; }
+      const started = performance.now();
+      try {
+        setStatus('تحميل/تهيئة U2NetP…');
+        await preloadU2Netp();
+        const modelReadyMs = performance.now() - started;
+        setStatus(`النموذج جاهز بعد ${modelReadyMs.toFixed(0)} ms. بدء الاستدلال…`);
+        const result = await removeBackgroundWithU2Netp(selectedBlob);
+        resultUrl = URL.createObjectURL(result.blob);
+        after.src = resultUrl;
+        setStatus(JSON.stringify({
+          crossOriginIsolated,
+          hardwareConcurrency: navigator.hardwareConcurrency,
+          model: 'u2netp/u2netp.onnx',
+          modelBytes: 4574861,
+          inputSize: '320x320',
+          modelReadyMs: Math.round(modelReadyMs),
+          inferenceMs: Math.round(result.timing.inferenceMs),
+          totalMs: Math.round(performance.now() - started),
+          outputBytes: result.blob.size,
+        }, null, 2));
+      } catch (error) {
+        console.error(error);
+        setStatus(`فشل الاختبار: ${error instanceof Error ? error.stack || error.message : String(error)}`);
+      }
+    });
+    setStatus(`جاهز. crossOriginIsolated = ${String(crossOriginIsolated)}، threads = ${navigator.hardwareConcurrency}`);
+  </script>
+</body>
+</html>
