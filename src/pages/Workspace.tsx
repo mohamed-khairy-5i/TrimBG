@@ -15,6 +15,7 @@ const Workspace = () => {
     isProcessing, 
     isLoadingModel, 
     progress, 
+    processingMode,
     reset, 
     downloadImage,
     processImage 
@@ -57,7 +58,7 @@ const Workspace = () => {
       {/* Workspace Navbar */}
       <header className="h-16 px-6 bg-white border-b border-[#E9E1D9]/50 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-4">
-          <Link to="/">
+          <Link to="/" onClick={reset}>
             <Logo size="sm" />
           </Link>
           <div className="hidden sm:h-6 sm:w-px sm:bg-[#E9E1D9]"></div>
@@ -67,7 +68,7 @@ const Workspace = () => {
         <div className="flex items-center gap-3">
           <Button 
             variant="ghost" 
-            onClick={() => navigate('/')}
+            onClick={() => { reset(); navigate('/'); }}
             className="text-[#5F5F5F] hover:text-[#2D2D2D] text-sm gap-2"
           >
             <Home className="w-5 h-5 sm:w-4 sm:h-4" />
@@ -116,6 +117,9 @@ const Workspace = () => {
                     <h3 className="text-xl font-bold text-[#2D2D2D]">
                        {isLoadingModel ? "جاري تجهيز محرك الذكاء الاصطناعي..." : "جاري إزالة الخلفية..."}
                     </h3>
+                    <p className="text-xs text-[#8B7E74]">
+                      {processingMode === 'fast' ? 'الوضع السريع — U2NetP FP16' : 'وضع أفضل جودة — ISNet'}
+                    </p>
                     {!isLoadingModel && (
                       <div className="space-y-2">
                         <Progress value={progress} className="h-2 bg-[#E9E1D9]" />
@@ -152,6 +156,16 @@ const Workspace = () => {
         {/* Workspace Sidebar */}
         <aside className="flex-1 lg:flex-none lg:w-[340px] bg-white border-t lg:border-t-0 lg:border-r border-[#E9E1D9]/50 flex flex-col z-10 shadow-[0_-10px_30px_rgba(0,0,0,0.02)] lg:shadow-[-10px_0_30px_rgba(0,0,0,0.02)] overflow-y-auto">
           <div className="p-6 lg:p-8 space-y-6 lg:space-y-8 flex-1">
+            <div className="rounded-3xl border border-[#E9E1D9]/70 bg-[#FAF9F6] p-4 space-y-2">
+              <p className="text-xs font-bold text-[#8B7E74]">نمط المعالجة المختار</p>
+              <p className="text-sm font-bold text-[#2D2D2D]">
+                {processingMode === 'fast' ? 'المعالجة السريعة — U2NetP FP16' : 'أفضل جودة — ISNet'}
+              </p>
+              <p className="text-[11px] text-[#5F5F5F] leading-relaxed">
+                {processingMode === 'fast' ? 'نتيجة أسرع مع تنازل محدود في تفاصيل الشعر.' : 'أفضل فصل متاح حالياً للحواف والتفاصيل الدقيقة.'}
+              </p>
+            </div>
+
             <div className="space-y-4">
               <h3 className="text-lg font-bold text-[#2D2D2D] flex items-center gap-2">
                 <Download className="w-5 h-5 text-[#8B7E74]" />

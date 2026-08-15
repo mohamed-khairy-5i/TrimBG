@@ -35,6 +35,7 @@ def main() -> None:
     parser.add_argument('--masks', type=Path, default=Path('external_data/aim500/val/masks'))
     parser.add_argument('--out', type=Path, default=Path('experiments/u2netp/eval-aim'))
     parser.add_argument('--limit', type=int, default=100)
+    parser.add_argument('--start', type=int, default=0)
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
 
@@ -42,7 +43,7 @@ def main() -> None:
     input_meta = session.get_inputs()[0]
     output_metas = session.get_outputs()
     size = int(input_meta.shape[-1])
-    paths = sorted(p for p in args.images.iterdir() if p.suffix.lower() in {'.jpg', '.jpeg', '.png', '.webp'})[:args.limit]
+    paths = sorted(p for p in args.images.iterdir() if p.suffix.lower() in {'.jpg', '.jpeg', '.png', '.webp'})[args.start:args.start + args.limit]
     records, latencies, maes = [], [], []
 
     for path in paths:

@@ -1,11 +1,14 @@
 import * as ort from 'onnxruntime-web/wasm';
 
-const MODEL_URL = '/models/u2netp/u2netp.onnx';
+const DEFAULT_MODEL_URL = '/models/u2netp/u2netp.onnx';
+const FP16_MODEL_URL = '/models/u2netp/u2netp-fp16.onnx';
 const WASM_MODULE_URL = new URL('../assets/onnxruntime/ort-wasm-simd-threaded.mjs', import.meta.url);
 const WASM_BINARY_URL = new URL('../assets/onnxruntime/ort-wasm-simd-threaded.wasm', import.meta.url);
 const INPUT_SIZE = 320;
 
-let sessionPromise: Promise<ort.InferenceSession> | null = null;
+export type U2NetpVariant = 'fp32' | 'fp16';
+
+const sessionPromises: Partial<Record<U2NetpVariant, Promise<ort.InferenceSession>>> = {};
 let runtimeConfigured = false;
 
 export interface U2NetpTiming {
@@ -23,22 +26,29 @@ function configureRuntime(): void {
   runtimeConfigured = true;
 }
 
-function getSession(): Promise<ort.InferenceSession> {
+function getBenchmarkVariant(): U2NetpVariant {
+  return new URLSearchParams(window.location.search).get('fp16') === '1' ? 'fp16' : 'fp32';
+}
+
+function getSession(variant: U2NetpVariant = getBenchmarkVariant()): Promise<ort.InferenceSession> {
   configureRuntime();
-  if (!sessionPromise) {
-    sessionPromise = ort.InferenceSession.create(MODEL_URL, {
-      executionProviders: ['wasm'],
-      graphOptimizationLevel: 'all',
-    }).catch((error) => {
-      sessionPromise = null;
-      throw error;
-    });
-  }
+  const existing = sessionPromises[variant];
+  if (existing) return existing;
+
+  const modelUrl = variant === 'fp16' ? FP16_MODEL_URL : DEFAULT_MODEL_URL;
+  const sessionPromise = ort.InferenceSession.create(modelUrl, {
+    executionProviders: ['wasm'],
+    graphOptimizationLevel: 'all',
+  }).catch((error) => {
+    delete sessionPromises[variant];
+    throw error;
+  });
+  sessionPromises[variant] = sessionPromise;
   return sessionPromise;
 }
 
-export function preloadU2Netp(): Promise<void> {
-  return getSession().then(() => undefined);
+export function preloadU2Netp(variant: U2NetpVariant = getBenchmarkVariant()): Promise<void> {
+  return getSession(variant).then(() => undefined);
 }
 
 function imageToTensor(bitmap: ImageBitmap): ort.Tensor {
@@ -118,11 +128,14 @@ async function renderResult(bitmap: ImageBitmap, maskValues: Float32Array | numb
   });
 }
 
-export async function removeBackgroundWithU2Netp(blob: Blob): Promise<{ blob: Blob; timing: U2NetpTiming }> {
+export async function removeBackgroundWithU2Netp(
+  blob: Blob,
+  options: { variant?: U2NetpVariant } = {},
+): Promise<{ blob: Blob; timing: U2NetpTiming }> {
   const totalStart = performance.now();
   const bitmap = await createImageBitmap(blob);
   try {
-    const session = await getSession();
+    const session = await getSession(options.variant);
     const input = imageToTensor(bitmap);
     const inferenceStart = performance.now();
     const outputs = await session.run({ [session.inputNames[0]]: input });

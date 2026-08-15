@@ -232,3 +232,21 @@ The best 128x128 progressive checkpoint was trained from 3,100 train pairs, with
 The progressive 256x256 fine-tuning did not improve over the previous V3 256 checkpoint. The best complete evaluation currently available for progressive 256-v2 is `mean_mae=0.24015` and `mean_seconds=0.03455` on the same AIM-500 validation split. Chromium measured `modelReadyMs=204`, `inferenceMs=144`, and `totalMs=436` on the reference image. The previous V3 256 result remains better at MAE 0.1734, so the 256 progressive branch is not selected.
 
 The visual Chromium checks show that 128 progressive is fast but loses parts of the subject and thin boundaries, while 256 progressive preserves more of the subject but leaves background leakage around the shoulders and upper edges. These results do not meet the production acceptance rule; ISNet remains the production model. The progressive files and benchmarks remain local experiment artifacts until GitHub authentication is restored.
+
+## Same-image ISNet versus U2NetP FP16 check
+
+On 15 August 2026, the AIM-500 sample `aim_0448_o_e4f47cba.jpg` (furred rabbit against foliage) was passed through the actual `/workspace` upload path. ISNet completed successfully and rendered a transparent result without runtime errors. Compared with U2NetP FP16 on the same image, ISNet retained fur details more convincingly, while U2NetP FP16 was substantially faster but softened fine hairs and showed limited green leakage near the lower edge. This supports retaining ISNet as the «best quality» mode and adding U2NetP FP16 as an optional «fast» mode rather than replacing ISNet.
+
+This visual check is not a precise ISNet timing benchmark because the current UI does not expose processing duration; the established production reference remains approximately 6.4 seconds warm on Chromium.
+
+
+## Integration smoke test after fast-mode integration
+
+After the reset/navigation fix, the production `/workspace` route was exercised on `aim_0448_o_e4f47cba.jpg` through the real file-upload path. ISNet completed successfully, rendered the before/after comparison, exposed the PNG download button, and showed `أفضل جودة — ISNet` in the sidebar. No processing error was observed in the browser result.
+
+The same integration path previously completed with U2NetP FP16 in the fast mode at `inferenceMs=615.6` and `totalMs=797.3` on the local Chromium session after model warm-up. This total includes the application path and result rendering, not only ONNX inference. The FP16 model remains approximately 2.25 MiB and the held-out AIM-500 MAE remains `0.050497`.
+
+A state-safety issue found during the release check was fixed: returning to the home page now resets the previous image/result, new uploads reset stale state before navigation, and reset revokes object URLs to reduce memory retention. The temporary AIM-500 image copied into `public/` for an earlier browser injection was removed.
+
+
+A post-build browser smoke test also passed for the fast mode on the same AIM-500 rabbit image. After returning to the home page, selecting `معالجة سريعة`, and uploading the image, `/workspace` rendered the transparent output, showed the download button, and displayed `المعالجة السريعة — U2NetP FP16` in the sidebar. This confirms that the mode selection survives navigation and routes to the intended engine.

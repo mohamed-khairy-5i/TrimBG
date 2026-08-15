@@ -1,6 +1,9 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { removeBackground, preloadBackgroundRemoval, ProgressCallback } from '@/lib/backgroundRemover';
+import { preloadU2Netp, removeBackgroundWithU2Netp } from '@/lib/u2netpBrowser';
+
+export type ProcessingMode = 'quality' | 'fast';
 
 interface WorkspaceContextType {
   originalImage: string | null;
@@ -8,7 +11,9 @@ interface WorkspaceContextType {
   isProcessing: boolean;
   isLoadingModel: boolean;
   progress: number;
+  processingMode: ProcessingMode;
   setOriginalImage: (url: string | null) => void;
+  setProcessingMode: (mode: ProcessingMode) => void;
   processImage: () => Promise<void>;
   reset: () => void;
   downloadImage: () => void;
@@ -23,17 +28,24 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [isProcessing, setIsProcessing] = useState(false);
   const [isLoadingModel, setIsLoadingModel] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [processingMode, setProcessingMode] = useState<ProcessingMode>('quality');
+  const operationIdRef = useRef(0);
 
   // Begin model initialization after an image is selected, so the Remove
   // button does not carry the full download cost in its critical path.
   useEffect(() => {
     if (!originalImage) return;
-    void preloadBackgroundRemoval();
-  }, [originalImage]);
+    if (processingMode === 'fast') {
+      void preloadU2Netp('fp16');
+    } else {
+      void preloadBackgroundRemoval();
+    }
+  }, [originalImage, processingMode]);
 
   const processImage = useCallback(async () => {
     if (!originalImage) return;
 
+    const operationId = ++operationIdRef.current;
     setIsProcessing(true);
     setProgress(0);
     setIsLoadingModel(true);
@@ -41,12 +53,23 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     try {
       const response = await fetch(originalImage);
       const blob = await response.blob();
-      const onProgress: ProgressCallback = (p) => {
+      let processedBlob: Blob;
+      if (processingMode === 'fast') {
+        // U2NetP has no download-progress callback; show the inference state
+        // after the image blob is ready and use the production FP16 artifact.
         setIsLoadingModel(false);
-        setProgress(Math.round(p * 100));
-      };
-
-      const processedBlob = await removeBackground(blob, onProgress);
+        setProgress(20);
+        const result = await removeBackgroundWithU2Netp(blob, { variant: 'fp16' });
+        console.info('[TrimBG] U2NetP FP16 timing', result.timing);
+        processedBlob = result.blob;
+      } else {
+        const onProgress: ProgressCallback = (p) => {
+          setIsLoadingModel(false);
+          setProgress(Math.round(p * 100));
+        };
+        processedBlob = await removeBackground(blob, onProgress);
+      }
+      if (operationId !== operationIdRef.current) return;
       const processedUrl = URL.createObjectURL(processedBlob);
 
       setProgress(100);
@@ -54,9 +77,12 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
       toast({
         title: "اكتملت المعالجة!",
-        description: "تمت إزالة الخلفية بدقة احترافية",
+        description: processingMode === 'fast'
+          ? "تمت إزالة الخلفية بسرعة على جهازك"
+          : "تمت إزالة الخلفية بدقة احترافية",
       });
     } catch (error) {
+      if (operationId !== operationIdRef.current) return;
       console.error('Error processing image:', error);
       toast({
         title: "فشلت العملية",
@@ -64,10 +90,12 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         variant: "destructive",
       });
     } finally {
-      setIsProcessing(false);
-      setIsLoadingModel(false);
+      if (operationId === operationIdRef.current) {
+        setIsProcessing(false);
+        setIsLoadingModel(false);
+      }
     }
-  }, [originalImage, toast]);
+  }, [originalImage, processingMode, toast]);
 
   const downloadImage = () => {
     if (!processedImage) return;
@@ -85,6 +113,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   };
 
   const reset = () => {
+    operationIdRef.current += 1;
+    if (originalImage?.startsWith('blob:')) URL.revokeObjectURL(originalImage);
+    if (processedImage?.startsWith('blob:')) URL.revokeObjectURL(processedImage);
     setOriginalImage(null);
     setProcessedImage(null);
     setProgress(0);
@@ -99,7 +130,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       isProcessing,
       isLoadingModel,
       progress,
+      processingMode,
       setOriginalImage,
+      setProcessingMode,
       processImage,
       reset,
       downloadImage

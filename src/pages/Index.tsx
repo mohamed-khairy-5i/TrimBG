@@ -9,11 +9,12 @@ import { useWorkspace } from "@/context/WorkspaceContext";
 
 const Index = () => {
   const navigate = useNavigate();
-  const { setOriginalImage } = useWorkspace();
+  const { setOriginalImage, setProcessingMode, processingMode, reset } = useWorkspace();
   const [dragActive, setDragActive] = useState(false);
 
   const handleFileUpload = (file: File) => {
     const imageUrl = URL.createObjectURL(file);
+    reset();
     setOriginalImage(imageUrl);
     navigate('/workspace');
   };
@@ -96,6 +97,45 @@ const Index = () => {
               <p className="text-xl lg:text-2xl text-[#5F5F5F] font-light leading-relaxed max-w-2xl mx-auto animate-in fade-in slide-in-from-bottom-10 duration-1000">
                   أداة احترافية، مجانية تماماً، والأهم من ذلك أنها تحترم خصوصيتك بمعالجة الصور داخل جهازك مباشرة.
               </p>
+            </div>
+
+            {/* Processing mode */}
+            <div className="max-w-3xl mx-auto w-full px-4 sm:px-0 mb-5">
+              <div className="bg-white/80 border border-[#E9E1D9] rounded-3xl p-4 md:p-5 shadow-soft text-right">
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <div>
+                    <p className="text-sm font-bold text-[#2D2D2D]">اختر نمط المعالجة</p>
+                    <p className="text-xs text-[#8B7E74] mt-1">كلا الخيارين يعملان داخل جهازك ولا يرفعان الصورة إلى خادم.</p>
+                  </div>
+                  <Zap className="w-5 h-5 text-[#8B7E74] shrink-0" />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    aria-pressed={processingMode === 'quality'}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setProcessingMode('quality');
+                    }}
+                    className={`rounded-2xl border px-4 py-3 text-right transition-all ${processingMode === 'quality' ? 'border-[#2D2D2D] bg-[#2D2D2D] text-white shadow-md' : 'border-[#E9E1D9] bg-[#FAF9F6] text-[#5F5F5F] hover:border-[#8B7E74]'}`}
+                  >
+                    <span className="block text-sm font-bold">أفضل جودة</span>
+                    <span className={`block text-xs mt-1 ${processingMode === 'quality' ? 'text-white/75' : 'text-[#8B7E74]'}`}>ISNet — أدق للشعر والحواف</span>
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={processingMode === 'fast'}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setProcessingMode('fast');
+                    }}
+                    className={`rounded-2xl border px-4 py-3 text-right transition-all ${processingMode === 'fast' ? 'border-[#2D2D2D] bg-[#2D2D2D] text-white shadow-md' : 'border-[#E9E1D9] bg-[#FAF9F6] text-[#5F5F5F] hover:border-[#8B7E74]'}`}
+                  >
+                    <span className="block text-sm font-bold">معالجة سريعة</span>
+                    <span className={`block text-xs mt-1 ${processingMode === 'fast' ? 'text-white/75' : 'text-[#8B7E74]'}`}>U2NetP FP16 — أسرع مع تنازل بسيط بالجودة</span>
+                  </button>
+                </div>
+              </div>
             </div>
 
             {/* Upload Area */}
